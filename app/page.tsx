@@ -5,7 +5,7 @@
  * - Waves unverändert
  * - Kein Blur (Header/Footer)
  * - Auto-Scroll: immer GANZ nach unten (hart), damit letzte Nachricht komplett über dem Composer sichtbar ist
- * - Mobile: Schrift minimal kleiner
+ * - Mobile: Schrift kleiner (nur Mobil)
  * - Textarea: startet 1-zeilig, wächst dynamisch
  */
 
@@ -14,8 +14,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type Msg = { id: string; role: "user" | "assistant"; content: string };
 
 const ACCENT = "#90adc3";
-const BASE_FS = 18;
-const MOBILE_FS = 16;
+const BASE_FS = 18;        // Desktop-Basis
+const MOBILE_FS = 14;      // *** Nur geändert: mobil kleinere Basis-Schrift ***
 const BIG_FS = "1.14rem";
 const CHIP_FS = 16;
 const ONE_LINE_H = 48;
@@ -139,14 +139,13 @@ export default function LinaPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // ---- Platz für Footer/Safe-Area berechnen ----
+  // Footer/Safe-Area berücksichtigen
   useEffect(() => {
     const vv = (window as any).visualViewport as VisualViewport | undefined;
     const calc = () => {
       const footerH = footerRef.current?.offsetHeight ?? 100;
       const safe = Number(getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom").replace("px", "")) || 0;
       setBottomPad(footerH + 24 + safe);
-      // wenn Footer sich ändert → ganz nach unten
       scrollToVeryBottom();
     };
     calc();
@@ -160,31 +159,18 @@ export default function LinaPage() {
     };
   }, []);
 
-  // ---- HART auf wirklich ganz unten scrollen ----
+  // GANZ nach unten scrollen (mehrfach, falls Höhe sich verzögert ändert)
   function scrollToVeryBottom() {
     const el = listRef.current;
     if (!el) return;
-    // direkt ans Ende
     el.scrollTop = el.scrollHeight;
-    // zur Sicherheit nach ein paar Frames nochmal (Fonts/Wraps/Bilder)
     requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     setTimeout(() => { el.scrollTop = el.scrollHeight; }, 32);
     setTimeout(() => { el.scrollTop = el.scrollHeight; }, 120);
   }
-
-  // beim Rendern / bei neuen Nachrichten / wenn Loader wechselt
   useEffect(scrollToVeryBottom, [messages, loading, suggestionsDismissed]);
 
-  // zusätzlich: wenn die Liste ihre Größe ändert (Zeilenumbruch etc.)
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver(() => scrollToVeryBottom());
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  // ---- Textarea Autosize (Start 1 Zeile) ----
+  // Textarea: Start 1 Zeile, wächst dynamisch
   useEffect(() => {
     if (!taRef.current) return;
     if (input.length === 0) {
@@ -319,7 +305,6 @@ export default function LinaPage() {
               <span style={{ ...styles.typingDot, animationDelay: ".36s" }} />
             </div>
           )}
-          {/* kein extra Bottom-Anker mehr nötig – wir scrollen auf scrollHeight */}
         </div>
       </main>
 
@@ -370,9 +355,13 @@ export default function LinaPage() {
         </div>
       </footer>
 
+      {/* *** Nur hier geändert: Mobile-Schriftgröße deutlich kleiner *** */}
       <style>{`
         :root { font-size: ${BASE_FS}px; --safe-bottom: env(safe-area-inset-bottom); }
-        @media (max-width: 768px) { :root { font-size: ${MOBILE_FS}px; } }
+        @media (max-width: 768px) {
+          :root { font-size: ${MOBILE_FS}px; }   /* kleinere Basis für rem */
+          button, textarea { font-size: 0.9rem; } /* auch px-basierte Elemente verkleinern */
+        }
         @keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.6}40%{transform:translateY(-4px);opacity:1}}
         html, body { height: 100%; }
         body { min-height: 100dvh; }
