@@ -2,11 +2,10 @@
 
 /**
  * LINA Chat (/lina)
- * - Canvas-Wellen (Sinus, full-screen, fixiert)
- * - Weiche Übergänge Idle <-> Denken (lerp), beim Denken moderates Tempo
- * - Auto-Scroll bis zur letzten Nachricht
- * - Enter = senden | Shift+Enter = neue Zeile
- * - Mobile Fix: Eingabe nie verdeckt (fixed Footer + Safe-Area) & Button-Logik
+ * - Waves unverändert
+ * - Mobile: kein Blur, Eingabe nie verdeckt (fixed + Safe-Area)
+ * - Auto-Scroll immer zur neuesten Nachricht
+ * - Textarea: startet einzeilig, wächst dynamisch (WhatsApp-Style)
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,8 +16,9 @@ const ACCENT = "#90adc3";
 const BASE_FS = 18;
 const BIG_FS = "1.14rem";
 const CHIP_FS = 16;
+const ONE_LINE_H = 48; // Höhe für 1 Textzeile inkl. Padding im Composer
 
-/* -------- Waves (Canvas) mit weichen Übergängen -------- */
+/* -------- Waves (Canvas) -------- */
 function WavesBackground({ thinking }: { thinking: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -69,13 +69,11 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
       ctx.fillRect(0, 0, w, h);
 
       const amp = ampRef.current;
-      const alpha = alphaRef.current;
-
       const waves = [
-        { amp: amp * 1.0, freq: 2.6, width: 3.0, alpha: alpha * 1.0 },
-        { amp: amp * 0.85, freq: 2.2, width: 2.2, alpha: alpha * 0.85 },
-        { amp: amp * 0.7, freq: 1.8, width: 1.8, alpha: alpha * 0.75 },
-        { amp: amp * 0.55, freq: 1.4, width: 1.5, alpha: alpha * 0.65 },
+        { amp: amp * 1.0, freq: 2.6, width: 3.0, alpha: alphaRef.current * 1.0 },
+        { amp: amp * 0.85, freq: 2.2, width: 2.2, alpha: alphaRef.current * 0.85 },
+        { amp: amp * 0.7, freq: 1.8, width: 1.8, alpha: alphaRef.current * 0.75 },
+        { amp: amp * 0.55, freq: 1.4, width: 1.5, alpha: alphaRef.current * 0.65 },
       ] as const;
 
       const midY = h * 0.6;
@@ -117,10 +115,7 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
 
 function hexToRgba(hex: string, a = 1) {
   const m = hex.replace("#", "");
-  const bigint = parseInt(
-    m.length === 3 ? m.split("").map((c) => c + c).join("") : m,
-    16
-  );
+  const bigint = parseInt(m.length === 3 ? m.split("").map((c) => c + c).join("") : m, 16);
   const r = (bigint >> 16) & 255;
   const g = (bigint >> 8) & 255;
   const b = bigint & 255;
@@ -130,29 +125,21 @@ function hexToRgba(hex: string, a = 1) {
 /* -------- Page -------- */
 export default function LinaPage() {
   const [messages, setMessages] = useState<Msg[]>([
-    {
-      id: "m1",
-      role: "assistant",
-      content: "Hi, ich bin LINA. Wie kann ich dir heute helfen? 😊",
-    },
+    { id: "m1", role: "assistant", content: "Hi, ich bin LINA. Wie kann ich dir heute helfen? 😊" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Quick-Suggestions Verhalten
+  // Quick-Suggestions
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
-  const [selectedSuggestion, setSelectedSuggestion] = useState<number | null>(
-    null
-  );
+  const [selectedSuggestion, setSelectedSuggestion] = useState<number | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const footerRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Dynamischer Bottom-Padding, damit auf Mobile nichts verdeckt wird
-  const [bottomPad, setBottomPad] = useState(120); // Fallback
-
-  // Mobile-Erkennung (nur fürs Layout; Design bleibt gleich)
+  const [bottomPad, setBottomPad] = useState(120);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768);
@@ -161,23 +148,11 @@ export default function LinaPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // VisualViewport: Footer oberhalb Tastatur halten (iOS fix)
+  // Safe-Area / Footer-Höhe berücksichtigen
   useEffect(() => {
     const vv = (window as any).visualViewport as VisualViewport | undefined;
-    if (!vv) {
-      // Fallback: nutze Footer-Höhe + Safe-Area
-      const update = () => {
-        const h = footerRef.current?.offsetHeight ?? 100;
-        setBottomPad(h + 24);
-      };
-      update();
-      window.addEventListener("resize", update);
-      return () => window.removeEventListener("resize", update);
-    }
-
-    const onVVChange = () => {
+    const calc = () => {
       const footerH = footerRef.current?.offsetHeight ?? 100;
-      // Platz = Footer + 24 + Safe-Area unten
       const safe = Number(
         getComputedStyle(document.documentElement)
           .getPropertyValue("--safe-bottom")
@@ -185,51 +160,41 @@ export default function LinaPage() {
       );
       setBottomPad(footerH + 24 + (safe || 0));
     };
-    onVVChange();
-    vv.addEventListener("resize", onVVChange);
-    vv.addEventListener("scroll", onVVChange);
-    window.addEventListener("resize", onVVChange);
+    calc();
+    vv?.addEventListener("resize", calc);
+    vv?.addEventListener("scroll", calc);
+    window.addEventListener("resize", calc);
     return () => {
-      vv.removeEventListener("resize", onVVChange);
-      vv.removeEventListener("scroll", onVVChange);
-      window.removeEventListener("resize", onVVChange);
+      vv?.removeEventListener("resize", calc);
+      vv?.removeEventListener("scroll", calc);
+      window.removeEventListener("resize", calc);
     };
   }, []);
 
-  // Auto-scroll bis ganz nach unten
+  // Auto-Scroll: immer ganz nach unten
   const scrollToBottom = () => {
-    const el = listRef.current;
-    if (!el) return;
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-      setTimeout(() => (el.scrollTop = el.scrollHeight), 60);
-    });
+    bottomRef.current?.scrollIntoView({ block: "end" });
   };
   useEffect(scrollToBottom, [messages, loading, suggestionsDismissed]);
 
-  // Auto-resize textarea
+  // Textarea-Autosize: Platzhalter ignorieren → 1 Zeile Start
   useEffect(() => {
     if (!taRef.current) return;
-    taRef.current.style.height = "0px";
-    taRef.current.style.height =
-      Math.min(160, taRef.current.scrollHeight) + "px";
+    if (input.length === 0) {
+      taRef.current.style.height = ONE_LINE_H + "px"; // fix 1 Zeile
+    } else {
+      taRef.current.style.height = "0px";
+      taRef.current.style.height = Math.min(160, taRef.current.scrollHeight) + "px";
+    }
   }, [input]);
 
-  const canSend = useMemo(
-    () => input.trim().length > 0 && !loading,
-    [input, loading]
-  );
-  const toApiHistory = (ms: Msg[]) =>
-    ms.map((m) => ({ role: m.role, content: m.content }));
+  const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
+  const toApiHistory = (ms: Msg[]) => ms.map((m) => ({ role: m.role, content: m.content }));
 
   async function sendMessage() {
     if (!canSend) return;
 
-    const userMsg: Msg = {
-      id: "u" + Date.now(),
-      role: "user",
-      content: input.trim(),
-    };
+    const userMsg: Msg = { id: "u" + Date.now(), role: "user", content: input.trim() };
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setLoading(true);
@@ -238,10 +203,7 @@ export default function LinaPage() {
       const res = await fetch("/api/lina", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMsg.content,
-          history: toApiHistory(messages),
-        }),
+        body: JSON.stringify({ message: userMsg.content, history: toApiHistory(messages) }),
       });
 
       let replyText = "";
@@ -255,11 +217,7 @@ export default function LinaPage() {
         replyText = "Ich konnte die Antwort nicht verarbeiten.";
       }
 
-      const reply: Msg = {
-        id: "a" + Date.now(),
-        role: "assistant",
-        content: replyText,
-      };
+      const reply: Msg = { id: "a" + Date.now(), role: "assistant", content: replyText };
       setMessages((m) => [...m, reply]);
     } catch {
       setMessages((m) => [
@@ -273,6 +231,7 @@ export default function LinaPage() {
       ]);
     } finally {
       setLoading(false);
+      scrollToBottom();
     }
   }
 
@@ -292,9 +251,8 @@ export default function LinaPage() {
 
   const handleSuggestionClick = (text: string, idx: number) => {
     setSelectedSuggestion(idx);
-    setSuggestionsDismissed(true); // alle anderen weg
-    setInput(text); // Text in Composer übernehmen
-    // Scroll nach unten, damit Composer sichtbar bleibt
+    setSuggestionsDismissed(true);
+    setInput(text);
     scrollToBottom();
   };
 
@@ -302,8 +260,13 @@ export default function LinaPage() {
     <div style={styles.page}>
       <WavesBackground thinking={loading} />
 
-      {/* Header */}
-      <header style={styles.header}>
+      {/* Header (Mobile ohne Blur) */}
+      <header
+        style={{
+          ...styles.header,
+          ...(isMobile ? { backdropFilter: "none", background: "rgba(255,255,255,0.9)" } : {}),
+        }}
+      >
         <div style={styles.brandLeft}>
           <div style={styles.avatarRing}>
             <img src="/lina-avatar.png" alt="LINA" style={styles.avatarImg} />
@@ -318,17 +281,9 @@ export default function LinaPage() {
       {/* Chat */}
       <main style={{ ...styles.main, paddingBottom: bottomPad }}>
         <div ref={listRef} style={styles.list}>
-          {/* einmalig: ausgewählter Chip als „ausgewählt“-Badge */}
           {selectedSuggestion !== null && (
             <div style={{ margin: "6px 0 2px 0" }}>
-              <button
-                disabled
-                style={{
-                  ...styles.suggestionBtn,
-                  opacity: 0.7,
-                  cursor: "default",
-                }}
-              >
+              <button disabled style={{ ...styles.suggestionBtn, opacity: 0.7, cursor: "default" }}>
                 {suggestionTexts[selectedSuggestion]}
               </button>
             </div>
@@ -341,34 +296,25 @@ export default function LinaPage() {
                 display: "flex",
                 gap: 12,
                 padding: "8px 0",
-                justifyContent:
-                  m.role === "assistant" ? "flex-start" : "flex-end",
+                justifyContent: m.role === "assistant" ? "flex-start" : "flex-end",
               }}
             >
               {m.role === "assistant" && (
-                <div
-                  style={{
-                    ...styles.avatarRing,
-                    width: 30,
-                    height: 30,
-                    boxShadow: `0 0 16px ${ACCENT}55`,
-                  }}
-                >
+                <div style={{ ...styles.avatarRing, width: 30, height: 30, boxShadow: `0 0 16px ${ACCENT}55` }}>
                   <img src="/lina-avatar.png" alt="LINA" style={styles.avatarImg} />
                 </div>
               )}
               <div
                 style={{
                   ...styles.bubbleBase,
-                  ...(m.role === "assistant"
-                    ? styles.bubbleLina
-                    : styles.bubbleUser),
+                  ...(m.role === "assistant" ? styles.bubbleLina : styles.bubbleUser),
                 }}
               >
                 {m.content}
               </div>
             </div>
           ))}
+
           {loading && (
             <div style={{ display: "flex", gap: 10, padding: "6px 0" }}>
               <span style={{ ...styles.typingDot, animationDelay: "0s" }} />
@@ -376,10 +322,11 @@ export default function LinaPage() {
               <span style={{ ...styles.typingDot, animationDelay: ".36s" }} />
             </div>
           )}
+          <div ref={bottomRef} />
         </div>
       </main>
 
-      {/* Composer (Desktop: sticky; Mobile: fixed über Tastatur) */}
+      {/* Footer (Mobile fixed, ohne Blur) */}
       <footer
         ref={footerRef}
         style={{
@@ -391,6 +338,8 @@ export default function LinaPage() {
                 right: 0,
                 bottom: 0,
                 paddingBottom: "calc(18px + var(--safe-bottom, 0px))",
+                backdropFilter: "none",
+                background: "rgba(255,255,255,0.9)",
                 zIndex: 3,
               }
             : {}),
@@ -399,11 +348,7 @@ export default function LinaPage() {
         {!suggestionsDismissed && (
           <div style={styles.suggestions}>
             {suggestionTexts.map((s, i) => (
-              <button
-                key={i}
-                onClick={() => handleSuggestionClick(s, i)}
-                style={styles.suggestionBtn}
-              >
+              <button key={i} onClick={() => handleSuggestionClick(s, i)} style={styles.suggestionBtn}>
                 {s}
               </button>
             ))}
@@ -416,9 +361,7 @@ export default function LinaPage() {
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
-              if (e.target.value.length > 0 && !suggestionsDismissed) {
-                setSuggestionsDismissed(true); // Tippen -> alle weg
-              }
+              if (e.target.value.length > 0 && !suggestionsDismissed) setSuggestionsDismissed(true);
             }}
             onKeyDown={onKeyDown}
             placeholder="Schreib mir einfach… (Enter: senden · Shift+Enter: Zeile)"
@@ -438,20 +381,11 @@ export default function LinaPage() {
           </button>
         </div>
 
-        <div
-          style={{
-            textAlign: "center",
-            marginTop: 10,
-            fontSize: 13,
-            opacity: 0.75,
-            color: "#334155",
-          }}
-        >
+        <div style={{ textAlign: "center", marginTop: 10, fontSize: 13, opacity: 0.75, color: "#334155" }}>
           Tipp: <b>Enter</b> zum Senden · <b>Shift+Enter</b> für neue Zeile
         </div>
       </footer>
 
-      {/* CSS-Variablen für Safe-Area & 100dvh */}
       <style>{`
         :root { font-size: ${BASE_FS}px; --safe-bottom: env(safe-area-inset-bottom); }
         @keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.6}40%{transform:translateY(-4px);opacity:1}}
@@ -464,13 +398,7 @@ export default function LinaPage() {
 
 /* ---------- Styles ---------- */
 const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100dvh",
-    display: "flex",
-    flexDirection: "column",
-    position: "relative",
-    color: "#0f172a",
-  },
+  page: { minHeight: "100dvh", display: "flex", flexDirection: "column", position: "relative", color: "#0f172a" },
   header: {
     position: "sticky" as const,
     top: 0,
@@ -478,7 +406,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "18px 22px",
-    backdropFilter: "blur(6px)",
+    backdropFilter: "blur(6px)", // Desktop behält Blur
     zIndex: 2,
   },
   brandLeft: { display: "flex", alignItems: "center", gap: 12 },
@@ -495,71 +423,19 @@ const styles: Record<string, React.CSSProperties> = {
   online: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, opacity: 0.8 },
   dot: { width: 9, height: 9, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 10px ${ACCENT}` },
 
-  main: {
-    flex: 1,
-    display: "flex",
-    justifyContent: "center",
-    padding: "0 18px",
-    position: "relative",
-    zIndex: 1,
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "flex-end",
-    flex: 1,
-    overflowY: "auto",
-    padding: "16px 0",
-    maxWidth: 960,
-    margin: "0 auto",
-  },
-  bubbleBase: {
-    maxWidth: "80%",
-    borderRadius: 18,
-    padding: "16px 18px",
-    whiteSpace: "pre-wrap",
-    lineHeight: 1.65,
-    fontSize: BIG_FS,
-  },
-  bubbleLina: {
-    background: "rgba(239,246,255,0.98)",
-    border: `1px solid ${ACCENT}88`,
-    color: "#0f172a",
-  },
+  main: { flex: 1, display: "flex", justifyContent: "center", padding: "0 18px", position: "relative", zIndex: 1 },
+  list: { display: "flex", flexDirection: "column", justifyContent: "flex-end", flex: 1, overflowY: "auto", padding: "16px 0", maxWidth: 960, margin: "0 auto" },
+
+  bubbleBase: { maxWidth: "80%", borderRadius: 18, padding: "16px 18px", whiteSpace: "pre-wrap", lineHeight: 1.65, fontSize: BIG_FS },
+  bubbleLina: { background: "rgba(239,246,255,0.98)", border: `1px solid ${ACCENT}88`, color: "#0f172a" },
   bubbleUser: { background: "#fff", border: `1px solid ${ACCENT}66`, color: "#0f172a" },
-  typingDot: {
-    width: 9,
-    height: 9,
-    borderRadius: "50%",
-    background: ACCENT,
-    animation: "dotBounce 1.4s infinite ease-in-out",
-  },
+  typingDot: { width: 9, height: 9, borderRadius: "50%", background: ACCENT, animation: "dotBounce 1.4s infinite ease-in-out" },
 
-  // Desktop: sticky; Mobile wird per Inline-Style zu fixed gemacht
-  footer: {
-    position: "sticky" as const,
-    bottom: 0,
-    padding: 18,
-    backdropFilter: "blur(6px)",
-    zIndex: 2,
-    background: "transparent",
-  },
+  // Desktop: sticky (Mobile wird per Inline zu fixed)
+  footer: { position: "sticky" as const, bottom: 0, padding: 18, backdropFilter: "blur(6px)", zIndex: 2, background: "transparent" },
 
-  suggestions: {
-    maxWidth: 960,
-    margin: "0 auto 12px",
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  suggestionBtn: {
-    fontSize: CHIP_FS,
-    padding: "10px 12px",
-    borderRadius: 999,
-    background: "#fff",
-    border: `1px solid ${ACCENT}44`,
-    cursor: "pointer",
-  },
+  suggestions: { maxWidth: 960, margin: "0 auto 12px", display: "flex", flexWrap: "wrap", gap: 10 },
+  suggestionBtn: { fontSize: CHIP_FS, padding: "10px 12px", borderRadius: 999, background: "#fff", border: `1px solid ${ACCENT}44`, cursor: "pointer" },
 
   composer: {
     maxWidth: 960,
@@ -576,17 +452,14 @@ const styles: Record<string, React.CSSProperties> = {
   textarea: {
     flex: 1,
     resize: "none" as const,
+    overflow: "hidden",
     background: "transparent",
     border: "none",
     outline: "none",
     color: "#0f172a",
     fontSize: BIG_FS,
+    lineHeight: 1.6,
+    height: ONE_LINE_H,       // Start-Höhe
   },
-  sendBtn: {
-    height: 60,
-    padding: "0 20px",
-    borderRadius: 14,
-    border: `1px solid ${ACCENT}88`,
-    background: `linear-gradient(135deg, ${ACCENT}, #6ea0b4)`,
-  },
+  sendBtn: { height: 60, padding: "0 20px", borderRadius: 14, border: `1px solid ${ACCENT}88`, background: `linear-gradient(135deg, ${ACCENT}, #6ea0b4)` },
 };
