@@ -3,9 +3,10 @@
 /**
  * LINA Chat (/lina)
  * - Waves unverändert
- * - Mobile: kein Blur, Eingabe nie verdeckt (fixed + Safe-Area)
- * - Auto-Scroll immer zur neuesten Nachricht
- * - Textarea: startet einzeilig, wächst dynamisch (WhatsApp-Style)
+ * - KEIN Blur mehr (Header/Footer) – Desktop & Mobile
+ * - Auto-Scroll: neueste Nachricht immer direkt über dem Composer
+ * - Mobile: Schrift minimal kleiner
+ * - Textarea: startet 1-zeilig, wächst dynamisch
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,15 +14,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type Msg = { id: string; role: "user" | "assistant"; content: string };
 
 const ACCENT = "#90adc3";
-const BASE_FS = 18;
+const BASE_FS = 18;        // Desktop-Basis
+const MOBILE_FS = 16;      // Mobile-Basis
 const BIG_FS = "1.14rem";
 const CHIP_FS = 16;
-const ONE_LINE_H = 48; // Höhe für 1 Textzeile inkl. Padding im Composer
+const ONE_LINE_H = 48;
 
 /* -------- Waves (Canvas) -------- */
 function WavesBackground({ thinking }: { thinking: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
+
   const ampRef = useRef(6);
   const speedRef = useRef(0.025);
   const alphaRef = useRef(0.2);
@@ -69,24 +72,22 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
       ctx.fillRect(0, 0, w, h);
 
       const amp = ampRef.current;
+      const alpha = alphaRef.current;
       const waves = [
-        { amp: amp * 1.0, freq: 2.6, width: 3.0, alpha: alphaRef.current * 1.0 },
-        { amp: amp * 0.85, freq: 2.2, width: 2.2, alpha: alphaRef.current * 0.85 },
-        { amp: amp * 0.7, freq: 1.8, width: 1.8, alpha: alphaRef.current * 0.75 },
-        { amp: amp * 0.55, freq: 1.4, width: 1.5, alpha: alphaRef.current * 0.65 },
+        { amp: amp * 1.0,  freq: 2.6, width: 3.0, alpha: alpha * 1.0 },
+        { amp: amp * 0.85, freq: 2.2, width: 2.2, alpha: alpha * 0.85 },
+        { amp: amp * 0.7,  freq: 1.8, width: 1.8, alpha: alpha * 0.75 },
+        { amp: amp * 0.55, freq: 1.4, width: 1.5, alpha: alpha * 0.65 },
       ] as const;
 
       const midY = h * 0.6;
       const spacing = h * 0.1;
-
       waves.forEach((wv, i) => {
         const y0 = midY + (i - 1.5) * spacing;
         ctx.beginPath();
         for (let x = 0; x <= w; x += 2) {
-          const y =
-            y0 + Math.sin((x / w) * Math.PI * wv.freq + t * (2 + i * 0.2)) * wv.amp;
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          const y = y0 + Math.sin((x / w) * Math.PI * wv.freq + t * (2 + i * 0.2)) * wv.amp;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = hexToRgba(ACCENT, wv.alpha);
         ctx.lineWidth = wv.width;
@@ -97,25 +98,20 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
       t += speedRef.current;
       rafRef.current = requestAnimationFrame(render);
     };
-
     rafRef.current = requestAnimationFrame(render);
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
   }, [thinking]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}
-    />
-  );
+  return <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }} />;
 }
 
 function hexToRgba(hex: string, a = 1) {
   const m = hex.replace("#", "");
-  const bigint = parseInt(m.length === 3 ? m.split("").map((c) => c + c).join("") : m, 16);
+  const bigint = parseInt(m.length === 3 ? m.split("").map(c => c + c).join("") : m, 16);
   const r = (bigint >> 16) & 255;
   const g = (bigint >> 8) & 255;
   const b = bigint & 255;
@@ -130,14 +126,14 @@ export default function LinaPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Quick-Suggestions
+  // Suggestions
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<number | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const footerRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const [bottomPad, setBottomPad] = useState(120);
   const [isMobile, setIsMobile] = useState(false);
@@ -148,17 +144,13 @@ export default function LinaPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Safe-Area / Footer-Höhe berücksichtigen
+  // Platz für Footer/Safe-Area berücksichtigen
   useEffect(() => {
     const vv = (window as any).visualViewport as VisualViewport | undefined;
     const calc = () => {
       const footerH = footerRef.current?.offsetHeight ?? 100;
-      const safe = Number(
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--safe-bottom")
-          .replace("px", "")
-      );
-      setBottomPad(footerH + 24 + (safe || 0));
+      const safe = Number(getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom").replace("px", "")) || 0;
+      setBottomPad(footerH + 24 + safe);
     };
     calc();
     vv?.addEventListener("resize", calc);
@@ -171,17 +163,23 @@ export default function LinaPage() {
     };
   }, []);
 
-  // Auto-Scroll: immer ganz nach unten
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
+  // ----- Auto-Scroll: immer zur neuesten Nachricht -----
+  const scrollToNewest = () => {
+    // Scroll das unsichtbare "bottomRef"-Element direkt unter die letzte Nachricht
+    bottomRef.current?.scrollIntoView({ block: "end", inline: "nearest" });
   };
-  useEffect(scrollToBottom, [messages, loading, suggestionsDismissed]);
+  useEffect(scrollToNewest, [messages, loading, suggestionsDismissed, bottomPad]);
+  useEffect(() => {
+    // Sicherstellen nach erstem Render & bei Fokus in die Textarea
+    const id = requestAnimationFrame(scrollToNewest);
+    return () => cancelAnimationFrame(id);
+  }, []);
 
-  // Textarea-Autosize: Platzhalter ignorieren → 1 Zeile Start
+  // Textarea Autosize (Start: 1 Zeile)
   useEffect(() => {
     if (!taRef.current) return;
     if (input.length === 0) {
-      taRef.current.style.height = ONE_LINE_H + "px"; // fix 1 Zeile
+      taRef.current.style.height = ONE_LINE_H + "px";
     } else {
       taRef.current.style.height = "0px";
       taRef.current.style.height = Math.min(160, taRef.current.scrollHeight) + "px";
@@ -231,7 +229,8 @@ export default function LinaPage() {
       ]);
     } finally {
       setLoading(false);
-      scrollToBottom();
+      // sicherheitshalber nochmals nach unten
+      scrollToNewest();
     }
   }
 
@@ -253,20 +252,15 @@ export default function LinaPage() {
     setSelectedSuggestion(idx);
     setSuggestionsDismissed(true);
     setInput(text);
-    scrollToBottom();
+    scrollToNewest();
   };
 
   return (
     <div style={styles.page}>
       <WavesBackground thinking={loading} />
 
-      {/* Header (Mobile ohne Blur) */}
-      <header
-        style={{
-          ...styles.header,
-          ...(isMobile ? { backdropFilter: "none", background: "rgba(255,255,255,0.9)" } : {}),
-        }}
-      >
+      {/* HEADER – kein Blur mehr */}
+      <header style={styles.header}>
         <div style={styles.brandLeft}>
           <div style={styles.avatarRing}>
             <img src="/lina-avatar.png" alt="LINA" style={styles.avatarImg} />
@@ -278,7 +272,7 @@ export default function LinaPage() {
         </div>
       </header>
 
-      {/* Chat */}
+      {/* CHAT-LISTE – der untere Padding hält Platz für den Composer frei */}
       <main style={{ ...styles.main, paddingBottom: bottomPad }}>
         <div ref={listRef} style={styles.list}>
           {selectedSuggestion !== null && (
@@ -322,27 +316,19 @@ export default function LinaPage() {
               <span style={{ ...styles.typingDot, animationDelay: ".36s" }} />
             </div>
           )}
+          {/* Anker für "immer ganz unten" */}
           <div ref={bottomRef} />
         </div>
       </main>
 
-      {/* Footer (Mobile fixed, ohne Blur) */}
+      {/* FOOTER – kein Blur, Desktop sticky, Mobile fixed */}
       <footer
         ref={footerRef}
         style={{
           ...styles.footer,
           ...(isMobile
-            ? {
-                position: "fixed",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                paddingBottom: "calc(18px + var(--safe-bottom, 0px))",
-                backdropFilter: "none",
-                background: "rgba(255,255,255,0.9)",
-                zIndex: 3,
-              }
-            : {}),
+            ? { position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 3 }
+            : { position: "sticky" as const, bottom: 0 }),
         }}
       >
         {!suggestionsDismissed && (
@@ -386,9 +372,13 @@ export default function LinaPage() {
         </div>
       </footer>
 
+      {/* globale Styles (inkl. Mobile-Schriftgröße & Safe-Area) */}
       <style>{`
         :root { font-size: ${BASE_FS}px; --safe-bottom: env(safe-area-inset-bottom); }
-        @keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.6}40%{transform:translateY(-4px);opacity:1}}
+        @media (max-width: 768px) {
+          :root { font-size: ${MOBILE_FS}px; }
+        }
+        @keyframes dotBounce { 0%,80%,100%{transform:translateY(0);opacity:.6} 40%{transform:translateY(-4px);opacity:1} }
         html, body { height: 100%; }
         body { min-height: 100dvh; }
       `}</style>
@@ -399,6 +389,8 @@ export default function LinaPage() {
 /* ---------- Styles ---------- */
 const styles: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", display: "flex", flexDirection: "column", position: "relative", color: "#0f172a" },
+
+  // Header ohne Blur – dezente Linie unten
   header: {
     position: "sticky" as const,
     top: 0,
@@ -406,33 +398,43 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "18px 22px",
-    backdropFilter: "blur(6px)", // Desktop behält Blur
+    background: "rgba(255,255,255,0.96)",
+    borderBottom: "1px solid rgba(0,0,0,0.06)",
     zIndex: 2,
   },
   brandLeft: { display: "flex", alignItems: "center", gap: 12 },
   avatarRing: {
-    width: 38,
-    height: 38,
-    borderRadius: "50%",
-    overflow: "hidden",
-    border: `1px solid ${ACCENT}66`,
-    boxShadow: `0 0 18px ${ACCENT}44`,
-    background: "#fff",
+    width: 38, height: 38, borderRadius: "50%", overflow: "hidden",
+    border: `1px solid ${ACCENT}66`, boxShadow: `0 0 18px ${ACCENT}22`, background: "#fff",
   },
   avatarImg: { width: "100%", height: "100%", objectFit: "cover" },
   online: { display: "flex", alignItems: "center", gap: 6, fontSize: 13, opacity: 0.8 },
   dot: { width: 9, height: 9, borderRadius: "50%", background: ACCENT, boxShadow: `0 0 10px ${ACCENT}` },
 
   main: { flex: 1, display: "flex", justifyContent: "center", padding: "0 18px", position: "relative", zIndex: 1 },
-  list: { display: "flex", flexDirection: "column", justifyContent: "flex-end", flex: 1, overflowY: "auto", padding: "16px 0", maxWidth: 960, margin: "0 auto" },
+  list: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end",
+    flex: 1,
+    overflowY: "auto",
+    padding: "16px 0",
+    maxWidth: 960,
+    margin: "0 auto",
+  },
 
   bubbleBase: { maxWidth: "80%", borderRadius: 18, padding: "16px 18px", whiteSpace: "pre-wrap", lineHeight: 1.65, fontSize: BIG_FS },
   bubbleLina: { background: "rgba(239,246,255,0.98)", border: `1px solid ${ACCENT}88`, color: "#0f172a" },
   bubbleUser: { background: "#fff", border: `1px solid ${ACCENT}66`, color: "#0f172a" },
   typingDot: { width: 9, height: 9, borderRadius: "50%", background: ACCENT, animation: "dotBounce 1.4s infinite ease-in-out" },
 
-  // Desktop: sticky (Mobile wird per Inline zu fixed)
-  footer: { position: "sticky" as const, bottom: 0, padding: 18, backdropFilter: "blur(6px)", zIndex: 2, background: "transparent" },
+  // Footer ohne Blur
+  footer: {
+    padding: 18,
+    background: "rgba(255,255,255,0.96)",
+    borderTop: "1px solid rgba(0,0,0,0.06)",
+    zIndex: 2,
+  },
 
   suggestions: { maxWidth: 960, margin: "0 auto 12px", display: "flex", flexWrap: "wrap", gap: 10 },
   suggestionBtn: { fontSize: CHIP_FS, padding: "10px 12px", borderRadius: 999, background: "#fff", border: `1px solid ${ACCENT}44`, cursor: "pointer" },
@@ -459,7 +461,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#0f172a",
     fontSize: BIG_FS,
     lineHeight: 1.6,
-    height: ONE_LINE_H,       // Start-Höhe
+    height: ONE_LINE_H,
   },
   sendBtn: { height: 60, padding: "0 20px", borderRadius: 14, border: `1px solid ${ACCENT}88`, background: `linear-gradient(135deg, ${ACCENT}, #6ea0b4)` },
 };
