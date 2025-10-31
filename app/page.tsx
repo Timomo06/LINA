@@ -3,8 +3,8 @@
 /**
  * LINA Chat (/lina)
  * - Waves unverändert
- * - KEIN Blur mehr (Header/Footer) – Desktop & Mobile
- * - Auto-Scroll: neueste Nachricht immer direkt über dem Composer
+ * - Kein Blur (Header/Footer)
+ * - Auto-Scroll: immer GANZ nach unten (hart), damit letzte Nachricht komplett über dem Composer sichtbar ist
  * - Mobile: Schrift minimal kleiner
  * - Textarea: startet 1-zeilig, wächst dynamisch
  */
@@ -14,8 +14,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type Msg = { id: string; role: "user" | "assistant"; content: string };
 
 const ACCENT = "#90adc3";
-const BASE_FS = 18;        // Desktop-Basis
-const MOBILE_FS = 16;      // Mobile-Basis
+const BASE_FS = 18;
+const MOBILE_FS = 16;
 const BIG_FS = "1.14rem";
 const CHIP_FS = 16;
 const ONE_LINE_H = 48;
@@ -24,7 +24,6 @@ const ONE_LINE_H = 48;
 function WavesBackground({ thinking }: { thinking: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
-
   const ampRef = useRef(6);
   const speedRef = useRef(0.025);
   const alphaRef = useRef(0.2);
@@ -64,7 +63,6 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
       alphaRef.current = lerp(alphaRef.current, tgt.alpha, 0.08);
 
       ctx.clearRect(0, 0, w, h);
-
       const grad = ctx.createLinearGradient(0, 0, 0, h);
       grad.addColorStop(0, "rgba(255,255,255,1)");
       grad.addColorStop(1, "rgba(247,250,252,1)");
@@ -72,12 +70,12 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
       ctx.fillRect(0, 0, w, h);
 
       const amp = ampRef.current;
-      const alpha = alphaRef.current;
+      const a = alphaRef.current;
       const waves = [
-        { amp: amp * 1.0,  freq: 2.6, width: 3.0, alpha: alpha * 1.0 },
-        { amp: amp * 0.85, freq: 2.2, width: 2.2, alpha: alpha * 0.85 },
-        { amp: amp * 0.7,  freq: 1.8, width: 1.8, alpha: alpha * 0.75 },
-        { amp: amp * 0.55, freq: 1.4, width: 1.5, alpha: alpha * 0.65 },
+        { amp: amp * 1.0, freq: 2.6, width: 3.0, alpha: a * 1.0 },
+        { amp: amp * 0.85, freq: 2.2, width: 2.2, alpha: a * 0.85 },
+        { amp: amp * 0.7, freq: 1.8, width: 1.8, alpha: a * 0.75 },
+        { amp: amp * 0.55, freq: 1.4, width: 1.5, alpha: a * 0.65 },
       ] as const;
 
       const midY = h * 0.6;
@@ -99,7 +97,6 @@ function WavesBackground({ thinking }: { thinking: boolean }) {
       rafRef.current = requestAnimationFrame(render);
     };
     rafRef.current = requestAnimationFrame(render);
-
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
@@ -126,12 +123,10 @@ export default function LinaPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Suggestions
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<number | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const footerRef = useRef<HTMLDivElement | null>(null);
 
@@ -144,13 +139,15 @@ export default function LinaPage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Platz für Footer/Safe-Area berücksichtigen
+  // ---- Platz für Footer/Safe-Area berechnen ----
   useEffect(() => {
     const vv = (window as any).visualViewport as VisualViewport | undefined;
     const calc = () => {
       const footerH = footerRef.current?.offsetHeight ?? 100;
       const safe = Number(getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom").replace("px", "")) || 0;
       setBottomPad(footerH + 24 + safe);
+      // wenn Footer sich ändert → ganz nach unten
+      scrollToVeryBottom();
     };
     calc();
     vv?.addEventListener("resize", calc);
@@ -163,19 +160,31 @@ export default function LinaPage() {
     };
   }, []);
 
-  // ----- Auto-Scroll: immer zur neuesten Nachricht -----
-  const scrollToNewest = () => {
-    // Scroll das unsichtbare "bottomRef"-Element direkt unter die letzte Nachricht
-    bottomRef.current?.scrollIntoView({ block: "end", inline: "nearest" });
-  };
-  useEffect(scrollToNewest, [messages, loading, suggestionsDismissed, bottomPad]);
+  // ---- HART auf wirklich ganz unten scrollen ----
+  function scrollToVeryBottom() {
+    const el = listRef.current;
+    if (!el) return;
+    // direkt ans Ende
+    el.scrollTop = el.scrollHeight;
+    // zur Sicherheit nach ein paar Frames nochmal (Fonts/Wraps/Bilder)
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    setTimeout(() => { el.scrollTop = el.scrollHeight; }, 32);
+    setTimeout(() => { el.scrollTop = el.scrollHeight; }, 120);
+  }
+
+  // beim Rendern / bei neuen Nachrichten / wenn Loader wechselt
+  useEffect(scrollToVeryBottom, [messages, loading, suggestionsDismissed]);
+
+  // zusätzlich: wenn die Liste ihre Größe ändert (Zeilenumbruch etc.)
   useEffect(() => {
-    // Sicherstellen nach erstem Render & bei Fokus in die Textarea
-    const id = requestAnimationFrame(scrollToNewest);
-    return () => cancelAnimationFrame(id);
+    const el = listRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => scrollToVeryBottom());
+    obs.observe(el);
+    return () => obs.disconnect();
   }, []);
 
-  // Textarea Autosize (Start: 1 Zeile)
+  // ---- Textarea Autosize (Start 1 Zeile) ----
   useEffect(() => {
     if (!taRef.current) return;
     if (input.length === 0) {
@@ -229,8 +238,7 @@ export default function LinaPage() {
       ]);
     } finally {
       setLoading(false);
-      // sicherheitshalber nochmals nach unten
-      scrollToNewest();
+      scrollToVeryBottom();
     }
   }
 
@@ -252,14 +260,14 @@ export default function LinaPage() {
     setSelectedSuggestion(idx);
     setSuggestionsDismissed(true);
     setInput(text);
-    scrollToNewest();
+    scrollToVeryBottom();
   };
 
   return (
     <div style={styles.page}>
       <WavesBackground thinking={loading} />
 
-      {/* HEADER – kein Blur mehr */}
+      {/* Header – ohne Blur */}
       <header style={styles.header}>
         <div style={styles.brandLeft}>
           <div style={styles.avatarRing}>
@@ -272,7 +280,7 @@ export default function LinaPage() {
         </div>
       </header>
 
-      {/* CHAT-LISTE – der untere Padding hält Platz für den Composer frei */}
+      {/* Chat */}
       <main style={{ ...styles.main, paddingBottom: bottomPad }}>
         <div ref={listRef} style={styles.list}>
           {selectedSuggestion !== null && (
@@ -298,12 +306,7 @@ export default function LinaPage() {
                   <img src="/lina-avatar.png" alt="LINA" style={styles.avatarImg} />
                 </div>
               )}
-              <div
-                style={{
-                  ...styles.bubbleBase,
-                  ...(m.role === "assistant" ? styles.bubbleLina : styles.bubbleUser),
-                }}
-              >
+              <div style={{ ...styles.bubbleBase, ...(m.role === "assistant" ? styles.bubbleLina : styles.bubbleUser) }}>
                 {m.content}
               </div>
             </div>
@@ -316,12 +319,11 @@ export default function LinaPage() {
               <span style={{ ...styles.typingDot, animationDelay: ".36s" }} />
             </div>
           )}
-          {/* Anker für "immer ganz unten" */}
-          <div ref={bottomRef} />
+          {/* kein extra Bottom-Anker mehr nötig – wir scrollen auf scrollHeight */}
         </div>
       </main>
 
-      {/* FOOTER – kein Blur, Desktop sticky, Mobile fixed */}
+      {/* Footer – ohne Blur; Desktop sticky, Mobile fixed */}
       <footer
         ref={footerRef}
         style={{
@@ -357,11 +359,7 @@ export default function LinaPage() {
           <button
             onClick={sendMessage}
             disabled={!canSend}
-            style={{
-              ...styles.sendBtn,
-              opacity: canSend ? 1 : 0.5,
-              cursor: canSend ? "pointer" : "not-allowed",
-            }}
+            style={{ ...styles.sendBtn, opacity: canSend ? 1 : 0.5, cursor: canSend ? "pointer" : "not-allowed" }}
           >
             Senden
           </button>
@@ -372,13 +370,10 @@ export default function LinaPage() {
         </div>
       </footer>
 
-      {/* globale Styles (inkl. Mobile-Schriftgröße & Safe-Area) */}
       <style>{`
         :root { font-size: ${BASE_FS}px; --safe-bottom: env(safe-area-inset-bottom); }
-        @media (max-width: 768px) {
-          :root { font-size: ${MOBILE_FS}px; }
-        }
-        @keyframes dotBounce { 0%,80%,100%{transform:translateY(0);opacity:.6} 40%{transform:translateY(-4px);opacity:1} }
+        @media (max-width: 768px) { :root { font-size: ${MOBILE_FS}px; } }
+        @keyframes dotBounce{0%,80%,100%{transform:translateY(0);opacity:.6}40%{transform:translateY(-4px);opacity:1}}
         html, body { height: 100%; }
         body { min-height: 100dvh; }
       `}</style>
@@ -390,7 +385,6 @@ export default function LinaPage() {
 const styles: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", display: "flex", flexDirection: "column", position: "relative", color: "#0f172a" },
 
-  // Header ohne Blur – dezente Linie unten
   header: {
     position: "sticky" as const,
     top: 0,
@@ -428,7 +422,6 @@ const styles: Record<string, React.CSSProperties> = {
   bubbleUser: { background: "#fff", border: `1px solid ${ACCENT}66`, color: "#0f172a" },
   typingDot: { width: 9, height: 9, borderRadius: "50%", background: ACCENT, animation: "dotBounce 1.4s infinite ease-in-out" },
 
-  // Footer ohne Blur
   footer: {
     padding: 18,
     background: "rgba(255,255,255,0.96)",
