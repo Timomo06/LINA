@@ -3,12 +3,18 @@ import OpenAI from "openai";
 import fs from "node:fs";
 import path from "node:path";
 
-// Wichtig: wir brauchen Node-Runtime (für fs/path)
+// Wir brauchen Node-Runtime (für fs/path)
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+// sichere Initialisierung – funktioniert auch ohne Key beim Build
+function getOpenAI() {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY not set");
+  }
+  return new OpenAI({ apiKey });
+}
 
 export async function POST(req: Request) {
   try {
@@ -18,7 +24,10 @@ export async function POST(req: Request) {
     const systemPromptPath = path.join(process.cwd(), "src", "data", "systemPrompt.txt");
     const systemPrompt = fs.readFileSync(systemPromptPath, "utf8");
 
-    // Anfrage an OpenAI
+    // OpenAI-Client nur hier anlegen (nicht global)
+    const openai = getOpenAI();
+
+    // Anfrage an OpenAI senden
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.5,
@@ -31,10 +40,10 @@ export async function POST(req: Request) {
     // Antworttext holen
     let reply = completion.choices?.[0]?.message?.content ?? "Keine Antwort erhalten.";
 
-    // ** entfernen
+    // Formatierung bereinigen
     reply = reply.replace(/\*\*/g, "").trim();
 
-    // Nur beim ersten Chat „Hey“ am Anfang einfügen, wenn nicht schon drin
+    // Nur beim ersten Chat „Hey“ einfügen, wenn nicht schon vorhanden
     if (firstMessage && !/^hey\b/i.test(reply)) {
       reply = "Hey! " + reply.charAt(0).toUpperCase() + reply.slice(1);
     }
