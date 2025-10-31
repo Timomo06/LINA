@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Resets ---------- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+/* ---------- Heller, lesbarer Base-Look ---------- */
+html { font-size: 18px; }             /* größere Grundschrift */
+
+body {
+  /* statt @apply text-slate-900 antialiased */
+  color: #0f172a;                     /* Tailwind slate-900 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #f1f5f9 100%);
+}
+
+/* ---------- Scrollbar dezent ---------- */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(61,169,252,.4); border-radius: 10px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,.05); }
+
+/* ---------- Transitions & kleine Animation ---------- */
+button, a, input { transition: all .2s ease; }
+
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: .6; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}

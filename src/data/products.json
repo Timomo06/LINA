@@ -1,0 +1,82 @@
+[
+  {
+    "id": "pkg-social-basic",
+    "title": "Social Media Paket Basic",
+    "category": "social_media",
+    "description": "4 Posts/Monat inkl. Text & Grafik, optional Reels als Add-on.",
+    "monthly": 249,
+    "from": 249,
+    "to": 349,
+    "tags": ["Instagram", "Facebook", "Planung", "Posting"]
+  },
+  {
+    "id": "pkg-social-pro",
+    "title": "Social Media Paket Pro",
+    "category": "social_media",
+    "description": "8 Posts/Monat + 2 Reels, inkl. Redaktionsplan & Monatsreport.",
+    "monthly": 549,
+    "from": 499,
+    "to": 699,
+    "tags": ["Instagram", "Reels", "Analytics"]
+  },
+  {
+    "id": "svc-landingpage",
+    "title": "Landingpage (One-Pager)",
+    "category": "website",
+    "description": "Moderner One-Pager inkl. SEO-Basics & Tracking.",
+    "one_time": 690,
+    "from": 690,
+    "to": 990,
+    "tags": ["Web", "SEO", "Tracking"]
+  },
+  {
+    "id": "svc-relaunch",
+    "title": "Website Relaunch (4–6 Seiten)",
+    "category": "website",
+    "description": "Neues Design, klare Struktur, mobil stark.",
+    "one_time": 2490,
+    "from": 1990,
+    "to": 2990,
+    "tags": ["Web", "UX", "Conversion"]
+  },
+  {
+    "id": "svc-photo",
+    "title": "Fotoshooting vor Ort (bis 2h)",
+    "category": "content_photo",
+    "description": "Authentische Bilder für Website & Social.",
+    "one_time": 290,
+    "from": 290,
+    "to": 490,
+    "tags": ["Foto", "Content"]
+  },
+  {
+    "id": "svc-reels",
+    "title": "Short Video Reels",
+    "category": "content_video",
+    "description": "2–4 Reels/Monat – Schnitt & Untertitel inklusive.",
+    "monthly": 199,
+    "from": 199,
+    "to": 559,
+    "tags": ["Video", "Reels"]
+  },
+  {
+    "id": "svc-gbp",
+    "title": "Google Unternehmensprofil",
+    "category": "local_seo",
+    "description": "Optimierung + 2 Beiträge/Monat.",
+    "monthly": 159,
+    "from": 159,
+    "to": 259,
+    "tags": ["Local SEO", "Google"]
+  },
+  {
+    "id": "svc-reporting",
+    "title": "Monatliches Reporting & Review",
+    "category": "analytics",
+    "description": "KPIs, Learnings, klare To-dos für den nächsten Monat.",
+    "monthly": 89,
+    "from": 89,
+    "to": 149,
+    "tags": ["Analytics", "KPIs"]
+  }
+]

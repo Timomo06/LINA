@@ -1,0 +1,78 @@
+{
+  "priorities": [
+    {
+      "if": {
+        "website_score": "<3"
+      },
+      "then_add": [
+        "landingpage-basic"
+      ],
+      "note": "Website first before traffic."
+    },
+    {
+      "if": {
+        "local": true
+      },
+      "then_add": [
+        "local-seo-gbp"
+      ],
+      "note": "Local businesses benefit from GBP."
+    },
+    {
+      "if": {
+        "social_score": "<3"
+      },
+      "then_add": [
+        "sm-posts-basic"
+      ],
+      "note": "Kontinuität bei Social Media."
+    },
+    {
+      "if": {
+        "needs_media": true
+      },
+      "then_add": [
+        "photo-shoot",
+        "sm-reels"
+      ],
+      "note": "Eigene Assets erhöhen Qualität."
+    },
+    {
+      "if": {
+        "analytics_missing": true
+      },
+      "then_add": [
+        "reporting-analytics"
+      ],
+      "note": "Messen = Steuern."
+    }
+  ],
+  "budget_fit": {
+    "tolerance_pct": 10,
+    "drop_order_monthly": [
+      "reporting-analytics",
+      "sm-posts-basic",
+      "local-seo-gbp"
+    ],
+    "drop_order_onetime": [
+      "photo-shoot",
+      "landingpage-basic"
+    ]
+  },
+  "compatibility": [
+    {
+      "requires": "landingpage-basic",
+      "also_add": [
+        "hosting-ssl"
+      ]
+    }
+  ],
+  "defaults": {
+    "scores": {
+      "website": 3,
+      "social": 3,
+      "local_seo": 3
+    },
+    "budget_monthly": 600
+  }
+}
